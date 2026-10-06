@@ -28,6 +28,27 @@ export function authorizeUpload(pathname, clientPayload, secret = process.env.UP
 }
 
 
+async function parseReqBody(req) {
+ if (req.body) {
+  if (typeof req.body === 'string') {
+   try { return JSON.parse(req.body); } catch { return req.body; }
+  }
+  return req.body;
+ }
+ if (typeof req.json === 'function') {
+  try { return await req.json(); } catch {}
+ }
+ return new Promise((resolve) => {
+  let data = '';
+  if (typeof req.on !== 'function') return resolve({});
+  req.on('data', chunk => { data += chunk; });
+  req.on('end', () => {
+   try { resolve(JSON.parse(data)); } catch { resolve({}); }
+  });
+  req.on('error', () => resolve({}));
+ });
+}
+
 export default async function handler(req, res) {
  if (req.method !== 'POST') {
   if (res.status) return res.status(405).json({ error: 'Método no permitido' });
@@ -38,10 +59,7 @@ export default async function handler(req, res) {
   return Response.json({ error: 'Activa el almacenamiento de música para subir archivos.' }, { status: 503 });
  }
  try {
-  let body = req.body;
-  if (!body && typeof req.json === 'function') {
-   body = await req.json();
-  }
+  const body = await parseReqBody(req);
   const jsonResponse = await handleUpload({
    body,
    request: req,
