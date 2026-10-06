@@ -67,8 +67,12 @@ $('#photo-files').addEventListener('change',async e=>{
 });
 $('#add-photo-url').addEventListener('click',()=>{if(photos.length>=MAX){$('#photo-status').textContent='You already have 10 photos.';return}const url=validURL($('#photo-url').value.trim());if(!url){$('#photo-status').textContent='Enter a valid direct HTTPS image link.';return}photos.push(preparePhoto({url,name:'Our memory '+(photos.length+1)}));render();persist();$('#photo-url').value='';$('#photo-status').textContent='Photo added successfully.'});
 window.drawOrbitPhotos=(ctx,w,h,time,project)=>{
- const ready=photos.filter(p=>p.ready);const projected=ready.map((photo,i)=>{const a=time*.075+i*Math.PI*2/ready.length+.4,q=project(Math.cos(a)*200,Math.sin(a)*90,Math.sin(a)*125);return {photo,q}}).sort((a,b)=>b.q[3]-a.q[3]);
- for(const {photo,q} of projected){const width=Math.min(w*.14,76)*q[2],height=width*1.18,x=q[0]-width/2,y=q[1]-height/2;ctx.save();ctx.globalCompositeOperation='source-over';ctx.globalAlpha=.72+Math.min(.2,q[2]*.15);ctx.shadowColor='rgba(255,183,190,.22)';ctx.shadowBlur=10;ctx.fillStyle='#f5e9d5';ctx.fillRect(x-4,y-4,width+8,height+16);ctx.shadowBlur=0;const iw=photo.img.naturalWidth,ih=photo.img.naturalHeight,target=width/height;let sx=0,sy=0,sw=iw,sh=ih;if(iw/ih>target){sw=ih*target;sx=(iw-sw)/2}else{sh=iw/target;sy=(ih-sh)/2}ctx.drawImage(photo.img,sx,sy,sw,sh,x,y,width,height);ctx.fillStyle='#896156';ctx.font='9px Georgia';ctx.textAlign='center';ctx.fillText('♡',q[0],y+height+8);ctx.restore()}
+ const ready=photos.filter(p=>p.ready);
+ const rx = Math.min(w * 0.38, 460);
+ const ry = Math.min(h * 0.24, 200);
+ const rz = 240;
+ const projected=ready.map((photo,i)=>{const a=time*.06+i*Math.PI*2/ready.length+.4,q=project(Math.cos(a)*rx,Math.sin(a)*ry,Math.sin(a)*rz);return {photo,q}}).sort((a,b)=>b.q[3]-a.q[3]);
+ for(const {photo,q} of projected){const width=Math.min(w*.13,82)*q[2],height=width*1.18,x=q[0]-width/2,y=q[1]-height/2;ctx.save();ctx.globalCompositeOperation='source-over';ctx.globalAlpha=.72+Math.min(.2,q[2]*.15);ctx.shadowColor='rgba(255,183,190,.22)';ctx.shadowBlur=10;ctx.fillStyle='#f5e9d5';ctx.fillRect(x-4,y-4,width+8,height+16);ctx.shadowBlur=0;const iw=photo.img.naturalWidth,ih=photo.img.naturalHeight,target=width/height;let sx=0,sy=0,sw=iw,sh=ih;if(iw/ih>target){sw=ih*target;sx=(iw-sw)/2}else{sh=iw/target;sy=(ih-sh)/2}ctx.drawImage(photo.img,sx,sy,sw,sh,x,y,width,height);ctx.fillStyle='#896156';ctx.font='9px Georgia';ctx.textAlign='center';ctx.fillText('♡',q[0],y+height+8);ctx.restore()}
 };
 render();
 
