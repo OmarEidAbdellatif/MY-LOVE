@@ -1,4 +1,5 @@
-import { put, handleUpload } from '@vercel/blob';
+import { put } from '@vercel/blob';
+import { handleUpload } from '@vercel/blob/client';
 import { createHash } from 'node:crypto';
 
 export function authorizeUpload(pathname, password, secret = process.env.UPLOAD_PASSWORD) {
