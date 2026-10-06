@@ -2,7 +2,8 @@ import { handleUpload } from '@vercel/blob/client';
 import { createHash } from 'node:crypto';
 
 export function authorizeUpload(pathname, clientPayload, secret = process.env.UPLOAD_PASSWORD) {
- if (!secret || secret.length < 12) throw new Error('Las subidas aún no están activadas.');
+ const cleanSecret = String(secret || '').trim();
+ if (!cleanSecret || cleanSecret.length < 12) throw new Error('Las subidas aún no están activadas.');
  let supplied = '';
  try {
   if (typeof clientPayload === 'string') {
@@ -11,9 +12,10 @@ export function authorizeUpload(pathname, clientPayload, secret = process.env.UP
    supplied = clientPayload.password || '';
   }
  } catch {}
- if (typeof supplied !== 'string' || supplied.length > 300) throw new Error('Clave incorrecta.');
+ const cleanSupplied = String(supplied || '').trim();
+ if (cleanSupplied.length > 300) throw new Error('Clave incorrecta.');
  const digest = s => createHash('sha256').update(String(s)).digest('hex');
- if (digest(supplied) !== digest(secret)) throw new Error('Clave incorrecta.');
+ if (digest(cleanSupplied) !== digest(cleanSecret)) throw new Error('Clave incorrecta.');
  const photo = /^photos\/[a-z0-9-]+\.(jpg|jpeg|png|webp)$/i.test(pathname);
  if (!photo && !/^songs\/[a-z0-9-]+\.(mp3|m4a|wav|ogg|aac|flac)$/i.test(pathname)) throw new Error('Archivo no permitido.');
  return {
@@ -24,6 +26,7 @@ export function authorizeUpload(pathname, clientPayload, secret = process.env.UP
   validUntil: Date.now() + 15 * 60 * 1000
  };
 }
+
 
 export default async function handler(req, res) {
  if (req.method !== 'POST') {
