@@ -57,11 +57,23 @@ export default async function handler(req, res) {
    } else {
     throw new Error('Formato de archivo no válido.');
    }
-   const blob = await put(filename, buffer, {
-    access: 'public',
-    contentType: contentType || 'image/jpeg',
-    token: process.env.BLOB_READ_WRITE_TOKEN
-   });
+   let blob;
+   try {
+    blob = await put(filename, buffer, {
+     access: 'public',
+     contentType: contentType || 'image/jpeg',
+     token: process.env.BLOB_READ_WRITE_TOKEN
+    });
+   } catch (err) {
+    if (err.message && (err.message.includes('private store') || err.message.includes('Private'))) {
+     blob = await put(filename, buffer, {
+      contentType: contentType || 'image/jpeg',
+      token: process.env.BLOB_READ_WRITE_TOKEN
+     });
+    } else {
+     throw err;
+    }
+   }
    const responseData = { url: blob.url };
    if (res.status) return res.status(200).json(responseData);
    return Response.json(responseData);
