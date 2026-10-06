@@ -4,13 +4,13 @@ import { createHash } from 'node:crypto';
 
 export function authorizeUpload(pathname, password, secret = process.env.UPLOAD_PASSWORD) {
  const cleanSecret = String(secret || '').trim();
- if (!cleanSecret || cleanSecret.length < 12) throw new Error('Las subidas aún no están activadas.');
+ if (!cleanSecret || cleanSecret.length < 12) throw new Error('Uploads are not enabled yet.');
  const cleanSupplied = String(password || '').trim();
- if (cleanSupplied.length > 300) throw new Error('Clave incorrecta.');
+ if (cleanSupplied.length > 300) throw new Error('Incorrect key.');
  const digest = s => createHash('sha256').update(String(s)).digest('hex');
- if (digest(cleanSupplied) !== digest(cleanSecret)) throw new Error('Clave incorrecta.');
+ if (digest(cleanSupplied) !== digest(cleanSecret)) throw new Error('Incorrect key.');
  const photo = /^photos\/[a-z0-9-]+\.(jpg|jpeg|png|webp)$/i.test(pathname);
- if (!photo && !/^songs\/[a-z0-9-]+\.(mp3|m4a|wav|ogg|aac|flac)$/i.test(pathname)) throw new Error('Archivo no permitido.');
+ if (!photo && !/^songs\/[a-z0-9-]+\.(mp3|m4a|wav|ogg|aac|flac)$/i.test(pathname)) throw new Error('File type not allowed.');
  return { photo };
 }
 
@@ -37,12 +37,12 @@ async function parseReqBody(req) {
 
 export default async function handler(req, res) {
  if (req.method !== 'POST') {
-  if (res.status) return res.status(405).json({ error: 'Método no permitido' });
-  return Response.json({ error: 'Método no permitido' }, { status: 405 });
+  if (res.status) return res.status(405).json({ error: 'Method not allowed' });
+  return Response.json({ error: 'Method not allowed' }, { status: 405 });
  }
  if (!process.env.BLOB_READ_WRITE_TOKEN) {
-  if (res.status) return res.status(503).json({ error: 'Activa el almacenamiento de música para subir archivos.' });
-  return Response.json({ error: 'Activa el almacenamiento de música para subir archivos.' }, { status: 503 });
+  if (res.status) return res.status(503).json({ error: 'Please enable Vercel Blob storage to upload files.' });
+  return Response.json({ error: 'Please enable Vercel Blob storage to upload files.' }, { status: 503 });
  }
  try {
   const body = await parseReqBody(req);
@@ -55,7 +55,7 @@ export default async function handler(req, res) {
    } else if (typeof fileData === 'string') {
     buffer = Buffer.from(fileData, 'base64');
    } else {
-    throw new Error('Formato de archivo no válido.');
+    throw new Error('Invalid file format.');
    }
    let blob;
    try {
@@ -91,7 +91,7 @@ export default async function handler(req, res) {
     authorizeUpload(pathname, supplied);
     return {
      allowedContentTypes: ['image/jpeg', 'image/png', 'image/webp', 'audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/x-wav', 'audio/ogg', 'audio/aac', 'audio/flac'],
-     maximumSizeInBytes: 15 * 1024 * 1024,
+     maximumSizeInBytes: 25 * 1024 * 1024,
      addRandomSuffix: true,
      allowOverwrite: false,
      validUntil: Date.now() + 15 * 60 * 1000
@@ -102,8 +102,8 @@ export default async function handler(req, res) {
   if (res.status) return res.status(200).json(jsonResponse);
   return Response.json(jsonResponse);
  } catch (error) {
-  if (res.status) return res.status(400).json({ error: error.message || 'No se pudo subir la foto o canción.' });
-  return Response.json({ error: error.message || 'No se pudo subir la foto o canción.' }, { status: 400 });
+  if (res.status) return res.status(400).json({ error: error.message || 'Could not upload file.' });
+  return Response.json({ error: error.message || 'Could not upload file.' }, { status: 400 });
  }
 }
 
