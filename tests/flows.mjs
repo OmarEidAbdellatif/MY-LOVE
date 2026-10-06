@@ -1,0 +1,51 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {JSDOM} from 'jsdom';
+import {authorizeUpload} from '../api/upload.js';
+const html=await readFile('public/index.html','utf8');
+async function open(url){
+ const dom=new JSDOM(html,{url,runScripts:'outside-only',pretendToBeVisual:true});const w=dom.window;
+ Object.defineProperty(w,'innerWidth',{value:390});w.matchMedia=q=>({matches:q.includes('max-width'),addEventListener(){},removeEventListener(){}});
+ w.ResizeObserver=class{observe(){}disconnect(){}};w.requestAnimationFrame=()=>1;w.cancelAnimationFrame=()=>{};
+ w.Request=Request;w.Response=Response;w.Headers=Headers;w.ReadableStream=ReadableStream;w.TransformStream=TransformStream;w.TextEncoder=TextEncoder;w.TextDecoder=TextDecoder;
+ w.fetch=async()=>({json:async()=>({musicUploadsEnabled:true})});
+ let copied='';Object.defineProperty(w.navigator,'clipboard',{value:{writeText:async s=>{copied=s}}});
+ const ctx=new Proxy({measureText:()=>({width:250}),getImageData:()=>({data:new Uint8ClampedArray(1100*230*4)}),createRadialGradient:()=>({addColorStop(){}})},{get:(t,k)=>k in t?t[k]:()=>{}});
+ w.HTMLCanvasElement.prototype.getContext=()=>ctx;w.HTMLCanvasElement.prototype.getBoundingClientRect=()=>({width:390,height:780});
+ w.HTMLMediaElement.prototype.pause=function(){};w.HTMLMediaElement.prototype.load=function(){};w.HTMLMediaElement.prototype.play=async function(){};
+ w.HTMLDialogElement.prototype.showModal=function(){this.open=true};w.HTMLDialogElement.prototype.close=function(){this.open=false};
+ for(const file of ['app.js','music-bundle.js','romance.js']){try{w.eval(await readFile('public/'+file,'utf8'))}catch(e){throw new Error(file+': '+e.message)}}
+ return {dom,w,copied:()=>copied,$:s=>w.document.querySelector(s)};
+}
+const editor=await open('https://para-ti.example/');
+editor.$('#name').value='María & Sol 💛';
+editor.$('#sender').value='Juli';
+editor.$('#letter').value='Siempre tú. <img src=x onerror=alert(1)>';
+editor.$('#upload-password').value='not-for-the-recipient';
+editor.$('#audio-url').value='https://music.example/our-song.mp3';
+editor.$('#use-audio-url').click();
+editor.$('#photo-url').value='https://images.example/our-photo.jpg';editor.$('#add-photo-url').click();
+editor.$('#copy-link').click();
+await new Promise(r=>setTimeout(r,20));
+const shared=editor.copied();assert(shared,'share link should be copied');const url=new URL(shared);
+assert.equal(url.searchParams.get('share'),'1');
+const state=new URLSearchParams(url.hash.slice(1));
+assert.equal(state.get('name'),'María & Sol 💛');assert.equal(state.get('audio'),'https://music.example/our-song.mp3');assert.equal(JSON.parse(state.get('photos'))[0].url,'https://images.example/our-photo.jpg');
+assert(!shared.includes('not-for-the-recipient'));assert.equal(editor.$('#photo-list').children.length,1);
+const receiver=await open(shared);
+assert.equal(receiver.$('#recipient').textContent,'María & Sol 💛');
+assert(receiver.w.document.documentElement.classList.contains('recipient-mode'));
+assert.equal(receiver.$('#gift-cover').hidden,false);assert.equal(receiver.$('#song').src,'https://music.example/our-song.mp3');
+assert.equal(receiver.$('#photo-list').children.length,1);
+receiver.$('#open-gift').click();assert.equal(receiver.$('#gift-cover').hidden,true);
+receiver.$('#open-letter').click();assert(receiver.$('#love-letter').open);assert.equal(receiver.$('#letter-body').querySelector('img'),null);
+assert.match(receiver.$('#letter-body').textContent,/<img/);
+editor.$('#photo-list button').click();editor.$('#copy-link').click();await new Promise(r=>setTimeout(r,10));assert.equal(new URLSearchParams(new URL(editor.copied()).hash.slice(1)).has('photos'),false);
+assert.throws(()=>authorizeUpload('songs/song.mp3',JSON.stringify({password:'wrong'}),'my-long-password'),/Clave/);
+assert.throws(()=>authorizeUpload('photos/a.svg',JSON.stringify({password:'my-long-password'}),'my-long-password'),/permitido/);
+assert.throws(()=>authorizeUpload('songs/song.mp3',JSON.stringify({password:'secret'}),''),/activadas/);
+const photoPolicy=authorizeUpload('photos/a.jpg',JSON.stringify({password:'my-long-password'}),'my-long-password');
+assert.equal(photoPolicy.maximumSizeInBytes,4*1024*1024);assert.deepEqual(photoPolicy.allowedContentTypes,['image/jpeg','image/png','image/webp']);
+console.log('PASS: personalized link, name, photo and music persistence, recipient surprise, letter safety, photo removal and upload authorization.');
+editor.dom.window.close();receiver.dom.window.close();
+
