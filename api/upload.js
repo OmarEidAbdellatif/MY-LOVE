@@ -67,6 +67,7 @@ export default async function handler(req, res) {
    } catch (err) {
     if (err.message && (err.message.includes('private store') || err.message.includes('Private'))) {
      blob = await put(filename, buffer, {
+      access: 'private',
       contentType: contentType || 'image/jpeg',
       token: process.env.BLOB_READ_WRITE_TOKEN
      });
