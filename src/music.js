@@ -16,6 +16,26 @@ $('#music-toggle').addEventListener('click',()=>song.paused?play():song.pause())
 song.addEventListener('playing',()=>{$('#music-toggle').textContent='Ⅱ';$('#music-toggle').setAttribute('aria-label','Pausar canción');$('#track-state').textContent='Sonando para ti ♫'});
 song.addEventListener('pause',()=>{$('#music-toggle').textContent='▶';$('#music-toggle').setAttribute('aria-label','Reproducir canción');$('#track-state').textContent='En pausa'});
 song.addEventListener('error',()=>{if(songURL)$('#track-state').textContent='Audio no disponible. Revisa el enlace o prueba un MP3.'});
+async function uploadSongDirect(file, ext, contentType, password) {
+ const dataURL = await dataUrlFromFile(file);
+ const response = await fetch('/api/upload', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+   action: 'direct',
+   filename: 'songs/' + crypto.randomUUID() + '.' + ext,
+   contentType,
+   fileData: dataURL,
+   password
+  })
+ });
+ const data = await response.json();
+ if (!response.ok || data.error) {
+  throw new Error(data.error || 'No se pudo subir la canción.');
+ }
+ return data.url;
+}
+
 $('#song-file').addEventListener('change',async e=>{
  const file=e.target.files?.[0];if(!file||uploadBusy||window.photosUploading)return;
  const status=$('#upload-status'),submit=$('#customize .primary'),ext=file.name.split('.').pop().toLowerCase();
@@ -26,7 +46,7 @@ $('#song-file').addEventListener('change',async e=>{
  if(!password && !localDemoMode){status.textContent='Escribe tu clave para subir música.';e.target.value='';$('#upload-password').focus();return}
  uploadBusy=true;window.musicUploading=true;e.target.disabled=true;submit.disabled=true;$('#remove-song').disabled=true;status.textContent=localDemoMode ? 'Guardando tu canción en modo local…' : 'Subiendo tu canción…';
  try{
- if(localDemoMode){const dataURL=await dataUrlFromFile(file);showSong(dataURL,file.name);updateURL();status.textContent='Canción guardada en modo local. El enlace compartido incluirá esta música.';}else{const blob=await upload('songs/'+crypto.randomUUID()+'.'+ext,file,{access:'public',contentType:types[ext],handleUploadUrl:'/api/upload',clientPayload:JSON.stringify({password}),onUploadProgress:({percentage})=>status.textContent='Subiendo tu canción… '+Math.round(percentage)+' %'});showSong(blob.url,file.name);updateURL();status.textContent='Canción guardada. El enlace compartido incluirá esta música.';}
+ if(localDemoMode){const dataURL=await dataUrlFromFile(file);showSong(dataURL,file.name);updateURL();status.textContent='Canción guardada en modo local. El enlace compartido incluirá esta música.';}else{const songUrl=await uploadSongDirect(file,ext,types[ext],password);showSong(songUrl,file.name);updateURL();status.textContent='Canción guardada. El enlace compartido incluirá esta música.';}
  }catch(error){status.textContent='No se pudo subir: '+(error.message||'revisa tu conexión y vuelve a intentar.')}
  finally{uploadBusy=false;window.musicUploading=false;e.target.disabled=false;submit.disabled=false;$('#remove-song').disabled=false;e.target.value=''}
 });

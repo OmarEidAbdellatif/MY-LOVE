@@ -35,12 +35,27 @@ async function compress(file){
   });
  }catch{return file}finally{URL.revokeObjectURL(objectURL)}
 }
-function uploadWithTimeout(pathname, file, options, timeoutMs = 20000) {
- return Promise.race([
-  upload(pathname, file, options),
-  new Promise((_, reject) => setTimeout(() => reject(new Error('تأخر الرفع على الشبكة. يرجى تجربة رفع صورة واحدة.')), timeoutMs))
- ]);
+async function uploadPhotoDirect(file, password) {
+ const optimized = await compress(file);
+ const dataURL = await toDataURL(optimized);
+ const response = await fetch('/api/upload', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+   action: 'direct',
+   filename: 'photos/' + crypto.randomUUID() + '.jpg',
+   contentType: 'image/jpeg',
+   fileData: dataURL,
+   password
+  })
+ });
+ const data = await response.json();
+ if (!response.ok || data.error) {
+  throw new Error(data.error || 'No se pudo subir la foto.');
+ }
+ return data.url;
 }
+
 $('#photo-files').addEventListener('change',async e=>{
  if(window.musicUploading||window.photosUploading){$('#photo-status').textContent='Espera a que termine la subida actual.';e.target.value='';return}
  const files=Array.from(e.target.files||[]),remaining=MAX-photos.length,status=$('#photo-status');
@@ -48,7 +63,7 @@ $('#photo-files').addEventListener('change',async e=>{
  if(files.length>remaining){status.textContent='Puedes agregar '+remaining+' fotos más (máximo 10).';e.target.value='';return}
  const password=$('#upload-password').value;if(!password && !localDemoMode){status.textContent='Escribe tu clave de subida en el apartado de música.';$('#upload-password').focus();e.target.value='';return}
  window.photosUploading=true;e.target.disabled=true;let completed=0;
- try{for(const file of files){if(!['image/jpeg','image/png','image/webp'].includes(file.type)&&!file.type.startsWith('image/'))throw new Error('Usa fotos JPG, PNG o WebP de hasta 10 MB.');status.textContent='Preparando foto '+(completed+1)+' de '+files.length+'…';const optimized=await compress(file);if(localDemoMode){const dataURL=await toDataURL(optimized);photos.push(preparePhoto({url:dataURL,name:'Nuestro recuerdo '+(photos.length+1)}));completed++;render();persist();status.textContent='Foto añadida en modo local. Sigue con la siguiente.';continue}status.textContent='Subiendo foto '+(completed+1)+' de '+files.length+'…';const blob=await uploadWithTimeout('photos/'+crypto.randomUUID()+'.jpg',optimized,{access:'public',contentType:'image/jpeg',handleUploadUrl:'/api/upload',clientPayload:JSON.stringify({password}),onUploadProgress:({percentage})=>status.textContent='Foto '+(completed+1)+' de '+files.length+' · '+Math.round(percentage)+' %'});photos.push(preparePhoto({url:blob.url,name:'Nuestro recuerdo '+(photos.length+1)}));completed++;render();persist()}status.textContent=completed+' fotos guardadas. Se incluirán en el enlace compartido.'}catch(error){status.textContent=(completed?completed+' fotos guardadas. ':'')+(error.message||'No se pudo subir la foto.')}finally{window.photosUploading=false;e.target.disabled=false;e.target.value=''}
+ try{for(const file of files){if(!['image/jpeg','image/png','image/webp'].includes(file.type)&&!file.type.startsWith('image/'))throw new Error('Usa fotos JPG, PNG o WebP de hasta 10 MB.');status.textContent='Preparando foto '+(completed+1)+' de '+files.length+'…';if(localDemoMode){const optimized=await compress(file);const dataURL=await toDataURL(optimized);photos.push(preparePhoto({url:dataURL,name:'Nuestro recuerdo '+(photos.length+1)}));completed++;render();persist();status.textContent='Foto añadida en modo local. Sigue con la siguiente.';continue}status.textContent='Subiendo foto '+(completed+1)+' de '+files.length+'…';const photoUrl=await uploadPhotoDirect(file,password);photos.push(preparePhoto({url:photoUrl,name:'Nuestro recuerdo '+(photos.length+1)}));completed++;render();persist()}status.textContent=completed+' fotos guardadas. Se incluirán en el enlace compartido.'}catch(error){status.textContent=(completed?completed+' fotos guardadas. ':'')+(error.message||'No se pudo subir la foto.')}finally{window.photosUploading=false;e.target.disabled=false;e.target.value=''}
 });
 $('#add-photo-url').addEventListener('click',()=>{if(photos.length>=MAX){$('#photo-status').textContent='Ya tienes 10 fotos. Quita alguna para agregar otra.';return}const url=validURL($('#photo-url').value.trim());if(!url){$('#photo-status').textContent='Escribe un enlace HTTPS directo de imagen.';return}photos.push(preparePhoto({url,name:'Nuestro recuerdo '+(photos.length+1)}));render();persist();$('#photo-url').value='';$('#photo-status').textContent='Foto añadida. Comprueba que se vea antes de compartir.'});
 window.drawOrbitPhotos=(ctx,w,h,time,project)=>{

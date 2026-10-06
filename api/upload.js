@@ -1,32 +1,17 @@
-import { handleUpload } from '@vercel/blob/client';
+import { put, handleUpload } from '@vercel/blob';
 import { createHash } from 'node:crypto';
 
-export function authorizeUpload(pathname, clientPayload, secret = process.env.UPLOAD_PASSWORD) {
+export function authorizeUpload(pathname, password, secret = process.env.UPLOAD_PASSWORD) {
  const cleanSecret = String(secret || '').trim();
  if (!cleanSecret || cleanSecret.length < 12) throw new Error('Las subidas aún no están activadas.');
- let supplied = '';
- try {
-  if (typeof clientPayload === 'string') {
-   supplied = JSON.parse(clientPayload).password || '';
-  } else if (clientPayload && typeof clientPayload === 'object') {
-   supplied = clientPayload.password || '';
-  }
- } catch {}
- const cleanSupplied = String(supplied || '').trim();
+ const cleanSupplied = String(password || '').trim();
  if (cleanSupplied.length > 300) throw new Error('Clave incorrecta.');
  const digest = s => createHash('sha256').update(String(s)).digest('hex');
  if (digest(cleanSupplied) !== digest(cleanSecret)) throw new Error('Clave incorrecta.');
  const photo = /^photos\/[a-z0-9-]+\.(jpg|jpeg|png|webp)$/i.test(pathname);
  if (!photo && !/^songs\/[a-z0-9-]+\.(mp3|m4a|wav|ogg|aac|flac)$/i.test(pathname)) throw new Error('Archivo no permitido.');
- return {
-  allowedContentTypes: photo ? ['image/jpeg', 'image/png', 'image/webp'] : ['audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/x-wav', 'audio/ogg', 'audio/aac', 'audio/flac'],
-  maximumSizeInBytes: (photo ? 10 : 15) * 1024 * 1024,
-  addRandomSuffix: true,
-  allowOverwrite: false,
-  validUntil: Date.now() + 15 * 60 * 1000
- };
+ return { photo };
 }
-
 
 async function parseReqBody(req) {
  if (req.body) {
@@ -60,10 +45,44 @@ export default async function handler(req, res) {
  }
  try {
   const body = await parseReqBody(req);
+  if (body && (body.action === 'direct' || body.fileData)) {
+   const { filename, password, contentType, fileData } = body;
+   authorizeUpload(filename, password);
+   let buffer;
+   if (typeof fileData === 'string' && fileData.includes(',')) {
+    buffer = Buffer.from(fileData.split(',')[1], 'base64');
+   } else if (typeof fileData === 'string') {
+    buffer = Buffer.from(fileData, 'base64');
+   } else {
+    throw new Error('Formato de archivo no válido.');
+   }
+   const blob = await put(filename, buffer, {
+    access: 'public',
+    contentType: contentType || 'image/jpeg',
+    token: process.env.BLOB_READ_WRITE_TOKEN
+   });
+   const responseData = { url: blob.url };
+   if (res.status) return res.status(200).json(responseData);
+   return Response.json(responseData);
+  }
   const jsonResponse = await handleUpload({
    body,
    request: req,
-   onBeforeGenerateToken: async (pathname, payload) => authorizeUpload(pathname, payload),
+   onBeforeGenerateToken: async (pathname, payload) => {
+    let supplied = '';
+    try {
+     if (typeof payload === 'string') supplied = JSON.parse(payload).password || '';
+     else if (payload && typeof payload === 'object') supplied = payload.password || '';
+    } catch {}
+    authorizeUpload(pathname, supplied);
+    return {
+     allowedContentTypes: ['image/jpeg', 'image/png', 'image/webp', 'audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/x-wav', 'audio/ogg', 'audio/aac', 'audio/flac'],
+     maximumSizeInBytes: 15 * 1024 * 1024,
+     addRandomSuffix: true,
+     allowOverwrite: false,
+     validUntil: Date.now() + 15 * 60 * 1000
+    };
+   },
    onUploadCompleted: async () => {}
   });
   if (res.status) return res.status(200).json(jsonResponse);
@@ -73,6 +92,7 @@ export default async function handler(req, res) {
   return Response.json({ error: error.message || 'No se pudo subir la foto o canción.' }, { status: 400 });
  }
 }
+
 
 
 
