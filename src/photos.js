@@ -14,15 +14,15 @@ function render(){const list=$('#photo-list');list.replaceChildren();photos.forE
 async function compress(file){
  const objectURL=URL.createObjectURL(file);
  try{
-  const img=await new Promise((resolve,reject)=>{
+  const img=await new Promise((resolve)=>{
    const image=new Image();
-   const timer=setTimeout(()=>resolve(null),6000);
+   const timer=setTimeout(()=>resolve(null),4000);
    image.onload=()=>{clearTimeout(timer);resolve(image)};
    image.onerror=()=>{clearTimeout(timer);resolve(null)};
    image.src=objectURL;
   });
   if(!img) return file;
-  const ratio=Math.min(1,1000/Math.max(img.naturalWidth,img.naturalHeight)),canvas=document.createElement('canvas');
+  const ratio=Math.min(1,800/Math.max(img.naturalWidth,img.naturalHeight)),canvas=document.createElement('canvas');
   canvas.width=Math.max(1,Math.round(img.naturalWidth*ratio));
   canvas.height=Math.max(1,Math.round(img.naturalHeight*ratio));
   const ctx=canvas.getContext('2d');
@@ -30,8 +30,8 @@ async function compress(file){
   ctx.fillRect(0,0,canvas.width,canvas.height);
   ctx.drawImage(img,0,0,canvas.width,canvas.height);
   return await new Promise(resolve=>{
-   const timer=setTimeout(()=>resolve(file),4000);
-   canvas.toBlob(blob=>{clearTimeout(timer);blob?resolve(blob):resolve(file)},'image/jpeg',.85);
+   const timer=setTimeout(()=>resolve(file),3000);
+   canvas.toBlob(blob=>{clearTimeout(timer);blob?resolve(blob):resolve(file)},'image/jpeg',.75);
   });
  }catch{return file}finally{URL.revokeObjectURL(objectURL)}
 }
